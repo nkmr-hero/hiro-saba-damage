@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ヒロサバ ダメージ計算</title>
+
+<style>
+body {
+  font-family: system-ui, sans-serif;
+  background: #171b24;
+  color: #fff;
+  margin: 0;
+  padding: 16px;
+}
+
+main {
+  max-width: 850px;
+  margin: auto;
+}
+
+h1 {
+  font-size: 24px;
+}
+
+h2 {
+  font-size: 18px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.card {
+  background: #252d3a;
+  padding: 15px;
+  border-radius: 12px;
+  margin: 12px 0;
+}
+
+label {
+  display: block;
+  font-size: 13px;
+  color: #bdc8d7;
+  margin-top: 10px;
+}
+
+input,
+select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  background: #111722;
+  color: white;
+  border: 1px solid #526078;
+  border-radius: 6px;
+  font-size: 16px;
+}
+
+.result {
+  font-size: 26px;
+  font-weight: bold;
+  color: #f5d52b;
+}
+
+button {
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 7px;
+  margin: 5px;
+  background: #f5d52b;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+
+<body>
+<main>
+
+<h1>ヒロサバ ダメージ計算ツール</h1>
+<p>数値を変更すると自動で再計算します。</p>
+
+<div class="grid">
+
+<!-- キャラクターA -->
+<div class="card">
+<h2>キャラクターA</h2>
+
+<label>名前</label>
+<input id="nameA" value="A">
+
+<label>攻撃力</label>
+<input id="atkA" type="number" value="0">
+
+<label>クリティカル値 (%)</label>
+<input id="critA" type="number" value="0" step="0.1">
+
+<label>クリティカルダメージ (%)</label>
+<input id="critDmgA" type="number" value="0">
+
+<label>ダメージアップ (%)</label>
+<input id="upA" type="number" value="0">
+
+<label>属性別ダメージアップ (%)</label>
+<input id="typeA" type="number" value="0" step="0.1">
+
+<label>敵の属性相性</label>
+<select id="enemyA">
+  <option value="50">弱点（+50%）</option>
+  <option value="-33">耐性（-33%）</option>
+  <option value="0" selected>どちらでもない（±0%）</option>
+</select>
+
+<p>属性倍率：<b id="typeResultA"></b></p>
+
+<div class="result" id="resultA"></div>
+
+<p id="detailA"></p>
+</div>
+
+
+<!-- キャラクターB -->
+<div class="card">
+<h2>キャラクターB</h2>
+
+<label>名前</label>
+<input id="nameB" value="B">
+
+<label>攻撃力</label>
+<input id="atkB" type="number" value="0">
+
+<label>クリティカル値 (%)</label>
+<input id="critB" type="number" value="0" step="0.1">
+
+<label>クリティカルダメージ (%)</label>
+<input id="critDmgB" type="number" value="0">
+
+<label>ダメージアップ (%)</label>
+<input id="upB" type="number" value="0">
+
+<label>属性別ダメージアップ (%)</label>
+<input id="typeB" type="number" value="0">
+
+<label>敵の属性相性</label>
+<select id="enemyB">
+  <option value="50">弱点（+50%）</option>
+  <option value="-33">耐性（-33%）</option>
+  <option value="0" selected>どちらでもない（±0%）</option>
+</select>
+
+<p>属性倍率：<b id="typeResultB"></b></p>
+
+<div class="result" id="resultB"></div>
+
+<p id="detailB"></p>
+</div>
+
+</div>
+
+
+<!-- 比較結果 -->
+<div class="card">
+<h2>比較結果</h2>
+
+<div class="result" id="winner"></div>
+
+<p id="ratio"></p>
+
+<button onclick="resetValues()">初期値に戻す</button>
+</div>
+
+
+<!-- 計算式 -->
+<div class="card">
+<h2>計算式</h2>
+
+<p>
+攻撃力 × ダメージアップ倍率 × 属性別ダメージ倍率 × 会心期待値
+</p>
+
+<p>
+会心期待値 = 1 + 会心率 × (会心ダメージ倍率 − 1)
+</p>
+
+<p>
+属性別ダメージ倍率 = 1 + (属性別ダメージアップ + 敵補正) / 100
+</p>
+
+</div>
+
+</main>
+
+
+<script>
+
+// 入力値取得
+function v(id) {
+  return Number(document.getElementById(id).value) || 0;
+}
+
+// 数値をカンマ区切りにする
+function fmt(x) {
+  return Math.round(x).toLocaleString("ja-JP");
+}
+
+// ダメージ計算
+function calc(s) {
+
+  let atk = v("atk" + s);
+  let up = v("up" + s);
+  let type = v("type" + s);
+  let enemy = v("enemy" + s);
+
+  let crit = v("crit" + s) / 100;
+  let critDmg = v("critDmg" + s) / 100;
+
+  // 属性倍率
+  let typeFactor = 1 + (type + enemy) / 100;
+
+  // 会心期待値
+  let critFactor = 1 + crit * (critDmg - 1);
+
+  // 非会心ダメージ
+  let base = atk * (1 + up / 100) * typeFactor;
+
+  // 期待ダメージ
+  let total = base * critFactor;
+
+  document.getElementById("typeResult" + s).textContent =
+    typeFactor.toFixed(3) + "倍";
+
+  document.getElementById("result" + s).textContent =
+    fmt(total);
+
+  document.getElementById("detail" + s).textContent =
+    "非会心：" + fmt(base) +
+    " ／ 会心期待値：" + critFactor.toFixed(4) + "倍";
+
+  return total;
+}
+
+
+// A・Bの比較
+function update() {
+
+  let a = calc("A");
+  let b = calc("B");
+
+  let na = document.getElementById("nameA").value || "A";
+  let nb = document.getElementById("nameB").value || "B";
+
+  if (a === b) {
+
+    document.getElementById("winner").textContent =
+      "同じダメージ";
+
+  } else {
+
+    let name = a > b ? na : nb;
+
+    let rate =
+      (Math.max(a, b) / Math.min(a, b) - 1) * 100;
+
+    document.getElementById("winner").textContent =
+      name + " が " + rate.toFixed(2) + "% 高い";
+  }
+
+  document.getElementById("ratio").textContent =
+    na + "：" + fmt(a) + " ／ " +
+    nb + "：" + fmt(b);
+}
+
+
+// 入力欄・プルダウン変更時に自動計算
+document.querySelectorAll("input, select").forEach(x => {
+  x.addEventListener("input", update);
+  x.addEventListener("change", update);
+});
+
+
+// 初期値に戻す
+function resetValues() {
+
+  let values = {
+    nameA: "A",
+    atkA: 0,
+    critA: 0,
+    critDmgA: 0,
+    upA: 0,
+    typeA: 0,
+    enemyA: 0,
+
+    nameB: "B",
+    atkB: 0,
+    critB: 0,
+    critDmgB: 0,
+    upB: 0,
+    typeB: 0,
+    enemyB: 0
+  };
+
+  Object.entries(values).forEach(([key, value]) => {
+    document.getElementById(key).value = value;
+  });
+
+  update();
+}
+
+
+// 初回計算
+update();
+
+</script>
+
+</body>
+</html>
